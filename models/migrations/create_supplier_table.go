@@ -4,7 +4,7 @@ import "gorm.io/gorm"
 
 type Supplier struct {
 	SupplierPK   int    `gorm:"primaryKey"`
-	SupplierName string `gorm:"type:varchar(255);not null"`
+	SupplierName string `gorm:"type:varchar(255);not null" json:"supplier_name"`
 }
 
 func CreateSupplierTable(db *gorm.DB) error {

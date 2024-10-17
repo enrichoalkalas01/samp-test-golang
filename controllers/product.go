@@ -1,21 +1,17 @@
 package controllers
 
 import (
-	"fmt"
+	"log"
 
+	"github.com/enrichoalkalas01/samp-test-golang/models"
+	"github.com/enrichoalkalas01/samp-test-golang/models/migrations"
 	"github.com/enrichoalkalas01/samp-test-golang/utils"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
-// Request Body Field & Validator ( tag )
-type ProductRequest struct {
-	Name  string `json:"name" validate:"required,min=1"`  // Name harus diisi, min 1 karakter
-	Email string `json:"email" validate:"required,email"` // Email harus valid
-	Age   int    `json:"age" validate:"gte=17,lte=65"`    // Umur harus antara 17 sampai 65 tahun
-}
-
 func ProductReadList(c *fiber.Ctx) error {
-	searchQuery, page, size, order, sortBy, err := utils.ValidationQueryParams((c)) // Parsing Automate Query Params
+	searchQuery, page, size, order, sortBy, err := utils.ValidationQueryParams(c)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
@@ -23,21 +19,57 @@ func ProductReadList(c *fiber.Ctx) error {
 		})
 	}
 
+	db := models.DB.Model(&migrations.Product{})
+
+	if searchQuery != "" {
+		db = db.Where("product_name LIKE ?", "%"+searchQuery+"%")
+	}
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		log.Printf("Error saat menghitung total data: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to count data",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
+
+	offset := (page - 1) * size
+	db = db.Offset(offset).Limit(size)
+
+	if sortBy != "" && order != "" {
+		db = db.Order(sortBy + " " + order)
+	} else {
+		db = db.Order("product_name asc")
+	}
+
+	var productList []migrations.Product
+	if err := db.Find(&productList).Error; err != nil {
+		log.Printf("Error saat mengambil daftar Product: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to fetch Product list",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"message": "Successfull to get Product",
-		"status":  200,
+		"message": "Successfully fetched Product list",
+		"status":  fiber.StatusOK,
+		"data":    productList,
 		"pagination": fiber.Map{
-			"search":  searchQuery,
-			"page":    page,
-			"size":    size,
-			"order":   order,
-			"sort_by": sortBy,
+			"search":    searchQuery,
+			"page":      page,
+			"size":      size,
+			"total":     total,
+			"order":     order,
+			"sort_by":   sortBy,
+			"totalPage": (total + int64(size) - 1) / int64(size),
 		},
 	})
 }
 
 func ProductReadDetail(c *fiber.Ctx) error {
-	id, err := utils.ValidationIdParams((c))
+	id, err := utils.ValidationIdParams(c)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
@@ -45,38 +77,54 @@ func ProductReadDetail(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println(id)
+	var product migrations.Product
+	if err := models.DB.First(&product, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"message": "Product not found",
+				"status":  fiber.StatusNotFound,
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Error while fetching Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
 
 	return c.JSON(fiber.Map{
-		"message": "Successfull to get Product detail",
-		"status":  200,
+		"message": "Successfully fetched Product detail",
+		"status":  fiber.StatusOK,
+		"data":    product,
 	})
 }
 
 func ProductCreate(c *fiber.Ctx) error {
-	var body ProductRequest
+	var body migrations.Product
 
-	// Memvalidasi request body
-	errorsMap, err := utils.ValidateStruct(c, &body)
-	if err != nil {
-		// Jika validasi gagal, kembalikan respons yang lebih rinci
+	if err := c.BodyParser(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "validation failed",
-			"errors":  errorsMap, // Mengembalikan detail kesalahan validasi
+			"message": "Invalid request body",
 			"status":  fiber.StatusBadRequest,
 		})
 	}
 
-	fmt.Println(body)
+	if err := models.DB.Create(&body).Error; err != nil {
+		log.Printf("Error saat menyimpan Product: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to create Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"message": "Successfull to create Product",
-		"status":  200,
+		"message": "Successfully created Product",
+		"status":  fiber.StatusOK,
 		"data":    body,
 	})
 }
 
 func ProductUpdate(c *fiber.Ctx) error {
-	id, err := utils.ValidationIdParams((c))
+	id, err := utils.ValidationIdParams(c)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
@@ -84,32 +132,47 @@ func ProductUpdate(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println(id)
-
-	var body ProductRequest
-
-	// Memvalidasi request body
-	errorsMap, err := utils.ValidateStruct(c, &body)
-	if err != nil {
-		// Jika validasi gagal, kembalikan respons yang lebih rinci
+	var body migrations.Product
+	if err := c.BodyParser(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "validation failed",
-			"errors":  errorsMap, // Mengembalikan detail kesalahan validasi
+			"message": "Invalid request body",
 			"status":  fiber.StatusBadRequest,
 		})
 	}
 
-	fmt.Println(body)
+	var product migrations.Product
+	if err := models.DB.First(&product, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"message": "Product not found",
+				"status":  fiber.StatusNotFound,
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Error while fetching Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
+
+	product.ProductName = body.ProductName
+
+	if err := models.DB.Save(&product).Error; err != nil {
+		log.Printf("Error saat mengupdate Product: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to update Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
 
 	return c.JSON(fiber.Map{
-		"message": "Successfull to update Product",
-		"status":  200,
-		"data":    body,
+		"message": "Successfully updated Product",
+		"status":  fiber.StatusOK,
+		"data":    product,
 	})
 }
 
 func ProductDelete(c *fiber.Ctx) error {
-	id, err := utils.ValidationIdParams((c))
+	id, err := utils.ValidationIdParams(c)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
@@ -117,10 +180,30 @@ func ProductDelete(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println(id)
+	var product migrations.Product
+	if err := models.DB.First(&product, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"message": "Product not found",
+				"status":  fiber.StatusNotFound,
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Error while fetching Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
+
+	if err := models.DB.Delete(&product).Error; err != nil {
+		log.Printf("Error saat menghapus Product: %v\n", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to delete Product",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
 
 	return c.JSON(fiber.Map{
-		"message": "Successfull to delete Product",
-		"status":  200,
+		"message": "Successfully deleted Product",
+		"status":  fiber.StatusOK,
 	})
 }

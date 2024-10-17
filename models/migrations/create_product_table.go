@@ -4,7 +4,7 @@ import "gorm.io/gorm"
 
 type Product struct {
 	ProductPK   int    `gorm:"primaryKey"`
-	ProductName string `gorm:"type:varchar(255);not null"`
+	ProductName string `gorm:"type:varchar(255);not null" json:"product_name"`
 }
 
 func CreateProductTable(db *gorm.DB) error {

@@ -9,5 +9,8 @@ func RouterApp(basePath string, app *fiber.App) {
 
 	RouterPenerimaanBarang("/penerimaan-barang", api)
 	RouterCustomer("/customer", api)
+	RouterProduct("/product", api)
+	RouterWarehouse("/warehouse", api)
+	RouterSupplier("/supplier", api)
 	RouterTemplate("/template", api)
 }
