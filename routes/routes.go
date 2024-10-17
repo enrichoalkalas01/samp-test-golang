@@ -8,6 +8,7 @@ func RouterApp(basePath string, app *fiber.App) {
 	api := app.Group(basePath)
 
 	RouterPenerimaanBarang("/penerimaan-barang", api)
+	RouterPengeluaranBarang("/pengeluaran-barang", api)
 	RouterCustomer("/customer", api)
 	RouterProduct("/product", api)
 	RouterWarehouse("/warehouse", api)

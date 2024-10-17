@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -61,7 +60,7 @@ func PenerimaanBarangReadList(c *fiber.Ctx) error {
 	}
 
 	var penerimaanList []migrations.PenerimaanBarangHeader
-	if err := db.Find(&penerimaanList).Error; err != nil {
+	if err := db.Preload("Details").Find(&penerimaanList).Error; err != nil {
 		log.Printf("Error saat mengambil daftar Penerimaan Barang: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": "Failed to fetch PenerimaanBarang list",
@@ -95,7 +94,7 @@ func PenerimaanBarangReadDetail(c *fiber.Ctx) error {
 	}
 
 	var penerimaanHeader migrations.PenerimaanBarangHeader
-	if err := models.DB.Where("trx_in_no = ?", trxInNo).First(&penerimaanHeader).Error; err != nil {
+	if err := models.DB.Preload("Details").Where("trx_in_no = ?", trxInNo).First(&penerimaanHeader).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"message": "Penerimaan Barang not found",
@@ -108,31 +107,19 @@ func PenerimaanBarangReadDetail(c *fiber.Ctx) error {
 		})
 	}
 
-	var penerimaanDetails []migrations.PenerimaanBarangDetail
-	if err := models.DB.Where("trx_in_idf = ?", penerimaanHeader.TrxInPK).Find(&penerimaanDetails).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Error while fetching PenerimaanBarangDetail",
-			"status":  fiber.StatusInternalServerError,
-		})
-	}
-
 	return c.JSON(fiber.Map{
 		"message": "Successfully fetched PenerimaanBarang detail",
-		"status":  fiber.StatusOK,
-		"data": fiber.Map{
-			"header":  penerimaanHeader,
-			"details": penerimaanDetails,
-		},
+		"status":  200,
+		"data":    penerimaanHeader,
 	})
 }
 
 func PenerimaanBarangCreate(c *fiber.Ctx) error {
 	var body PenerimaanBarangRequest
-
 	errorsMap, err := utils.ValidateStruct(c, &body)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "validation failed",
+			"message": "Validation failed",
 			"errors":  errorsMap,
 			"status":  fiber.StatusBadRequest,
 		})
@@ -161,7 +148,7 @@ func PenerimaanBarangCreate(c *fiber.Ctx) error {
 		tx.Rollback()
 		log.Printf("Error saat menyimpan PenerimaanBarangHeader: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "failed to create PenerimaanBarangHeader",
+			"message": "Failed to create PenerimaanBarangHeader",
 			"status":  fiber.StatusInternalServerError,
 		})
 	}
@@ -178,7 +165,7 @@ func PenerimaanBarangCreate(c *fiber.Ctx) error {
 			tx.Rollback()
 			log.Printf("Error saat menyimpan PenerimaanBarangDetail: %v\n", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"message": "failed to create PenerimaanBarangDetail",
+				"message": "Failed to create PenerimaanBarangDetail",
 				"status":  fiber.StatusInternalServerError,
 			})
 		}
@@ -187,7 +174,7 @@ func PenerimaanBarangCreate(c *fiber.Ctx) error {
 	if err := tx.Commit().Error; err != nil {
 		log.Printf("Error saat commit transaksi: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "failed to commit transaction",
+			"message": "Failed to commit transaction",
 			"status":  fiber.StatusInternalServerError,
 		})
 	}
@@ -208,6 +195,14 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 		})
 	}
 
+	var body PenerimaanBarangRequest
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid request body",
+			"status":  fiber.StatusBadRequest,
+		})
+	}
+
 	var penerimaanHeader migrations.PenerimaanBarangHeader
 	if err := models.DB.Where("trx_in_no = ?", trxInNo).First(&penerimaanHeader).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -222,15 +217,6 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 		})
 	}
 
-	var body PenerimaanBarangRequest
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Invalid request body",
-			"status":  fiber.StatusBadRequest,
-		})
-	}
-
-	// Konversi tanggal dari string ke time.Time
 	layout := "2006-01-02"
 	trxInDate, err := time.Parse(layout, body.TrxInDate)
 	if err != nil {
@@ -240,7 +226,6 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 		})
 	}
 
-	// Update data header
 	penerimaanHeader.TrxInDate = trxInDate
 	penerimaanHeader.WhsIdf = body.WhsIdf
 	penerimaanHeader.TrxInSuppIdf = body.TrxInSuppIdf
@@ -253,15 +238,13 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 		})
 	}
 
-	// Hapus semua detail lama terkait header
-	if err := models.DB.Where("TrxInIDF = ?", penerimaanHeader.TrxInPK).Delete(&migrations.PenerimaanBarangDetail{}).Error; err != nil {
+	if err := models.DB.Where("trx_in_id_f = ?", penerimaanHeader.TrxInPK).Delete(&migrations.PenerimaanBarangDetail{}).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": "Failed to delete old PenerimaanBarangDetail",
 			"status":  fiber.StatusInternalServerError,
 		})
 	}
 
-	// Tambah detail baru
 	for _, detail := range body.Details {
 		penerimaanDetail := migrations.PenerimaanBarangDetail{
 			TrxInIDF:         penerimaanHeader.TrxInPK,
@@ -270,7 +253,6 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 			TrxInDQtyPcs:     detail.QtyPcs,
 		}
 
-		// Simpan detail baru
 		if err := models.DB.Create(&penerimaanDetail).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": "Failed to create PenerimaanBarangDetail",
@@ -279,7 +261,6 @@ func PenerimaanBarangUpdate(c *fiber.Ctx) error {
 		}
 	}
 
-	// Mengembalikan respons sukses
 	return c.JSON(fiber.Map{
 		"message": "Successfully updated PenerimaanBarang",
 		"status":  fiber.StatusOK,
@@ -296,7 +277,6 @@ func PenerimaanBarangDelete(c *fiber.Ctx) error {
 		})
 	}
 
-	// Cari header berdasarkan trx_in_no
 	var penerimaanHeader migrations.PenerimaanBarangHeader
 	if err := models.DB.Where("trx_in_no = ?", trxInNo).First(&penerimaanHeader).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -311,37 +291,22 @@ func PenerimaanBarangDelete(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println(penerimaanHeader.TrxInPK)
-	// // Hapus semua detail terkait header
-	// trxInPKInt := int(penerimaanHeader.TrxInPK)
-	var penerimaanDetail migrations.PenerimaanBarangDetail
-	details := models.DB.Where("trx_in_id_f = ?", penerimaanHeader.TrxInPK).First(&penerimaanDetail)
-	// if details != nil {
-	// 	log.Printf("Error saat menghapus PenerimaanBarangDetail dengan trx_in_d_f %d: %v\n", penerimaanHeader.TrxInPK, err)
-	// }
+	if err := models.DB.Where("trx_in_id_f = ?", penerimaanHeader.TrxInPK).Delete(&migrations.PenerimaanBarangDetail{}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to delete PenerimaanBarangDetail",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
 
-	fmt.Println(details)
-	// if err := models.DB.Where("trx_in_d_f = ?", penerimaanHeader.TrxInPK).Delete(&migrations.PenerimaanBarangDetail{}).Error; err != nil {
-	// // 	log.Printf("Error saat menghapus PenerimaanBarangDetail dengan trx_in_d_f %d: %v\n", penerimaanHeader.TrxInPK, err)
-	// // 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-	// // 		"message": "Failed to delete PenerimaanBarangDetail",
-	// // 		"status":  fiber.StatusInternalServerError,
-	// // 	})
-	// }
+	if err := models.DB.Delete(&penerimaanHeader).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Failed to delete PenerimaanBarangHeader",
+			"status":  fiber.StatusInternalServerError,
+		})
+	}
 
-	// // Hapus header setelah detail dihapus
-	// if err := models.DB.Delete(&penerimaanHeader).Error; err != nil {
-	// 	log.Printf("Error saat menghapus header: %v\n", err)
-	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-	// 		"message": "Failed to delete PenerimaanBarangHeader",
-	// 		"status":  fiber.StatusInternalServerError,
-	// 	})
-	// }
-
-	// Mengembalikan respons sukses
 	return c.JSON(fiber.Map{
-		"message": "Successfully deleted PenerimaanBarang and related details",
-		"status":  200,
-		"data":    details,
+		"message": "Successfully deleted PenerimaanBarang",
+		"status":  fiber.StatusOK,
 	})
 }
