@@ -12,15 +12,15 @@ import (
 )
 
 type PengeluaranBarangRequest struct {
-	TrxOutNo      string          `json:"trx_out_no"`
-	TrxOutDate    string          `json:"trx_out_date"`
-	WhsIdf        int             `json:"whs_idf"`
-	TrxOutSuppIdf int             `json:"trx_out_supp_idf"`
-	TrxOutNotes   string          `json:"trx_out_notes"`
-	Details       []DetailRequest `json:"details"`
+	TrxOutNo      string                     `json:"trx_out_no"`
+	TrxOutDate    string                     `json:"trx_out_date"`
+	WhsIdf        int                        `json:"whs_idf"`
+	TrxOutSuppIdf int                        `json:"trx_out_supp_idf"`
+	TrxOutNotes   string                     `json:"trx_out_notes"`
+	Details       []PengeluaranDetailRequest `json:"details"`
 }
 
-type DetailRequest struct {
+type PengeluaranDetailRequest struct {
 	ProductID int `json:"product_id"`
 	QtyDus    int `json:"qty_dus"`
 	QtyPcs    int `json:"qty_pcs"`
