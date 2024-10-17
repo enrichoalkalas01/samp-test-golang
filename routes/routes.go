@@ -14,4 +14,5 @@ func RouterApp(basePath string, app *fiber.App) {
 	RouterWarehouse("/warehouse", api)
 	RouterSupplier("/supplier", api)
 	RouterTemplate("/template", api)
+	RouterLaporan("/laporan-stock", api)
 }

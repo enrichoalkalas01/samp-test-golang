@@ -957,6 +957,31 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "laporan",
+			"item": [
+				{
+					"name": "laporan",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:7000/api/v1/laporan-stock",
+							"host": [
+								"localhost"
+							],
+							"port": "7000",
+							"path": [
+								"api",
+								"v1",
+								"laporan-stock"
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	]
 }
